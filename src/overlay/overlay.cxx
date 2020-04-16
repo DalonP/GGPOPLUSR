@@ -15,6 +15,61 @@ static unsigned short nOurGGPOPort;
 
 IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam); 
 
+
+/* Parses input flags, which may be based on non-default button settings,
+and returns normalized input flags */
+unsigned int normalizeInput(GameState* lpGameState, unsigned int* input) {
+	int p = lpGameState->ggpoState.localPlayerIndex;
+
+	unsigned int normalizedInput = 0;
+
+	normalizedInput |= (*input & Up);
+	normalizedInput |= (*input & Down);
+	normalizedInput |= (*input & Left);
+	normalizedInput |= (*input & Right);
+
+	if (*input & lpGameState->arrPlayerData[p].ctrlP) {
+		normalizedInput |= Punch;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlK) {
+		normalizedInput |= Kick;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlS) {
+		normalizedInput |= Slash;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlH) {
+		normalizedInput |= HSlash;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlD) {
+		normalizedInput |= Dust;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlRespect) {
+		normalizedInput |= Respect;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlPKMacro) {
+		normalizedInput |= Punch;
+		normalizedInput |= Kick;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlPDMacro) {
+		normalizedInput |= Punch;
+		normalizedInput |= Dust;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlPKSMacro) {
+		normalizedInput |= Punch;
+		normalizedInput |= Kick;
+		normalizedInput |= Slash;
+	}
+	if (*input & lpGameState->arrPlayerData[p].ctrlPKSHMacro) {
+		normalizedInput |= Punch;
+		normalizedInput |= Kick;
+		normalizedInput |= Slash;
+		normalizedInput |= HSlash;
+	}
+	
+
+	return normalizedInput;
+}
+
 void DrawEnterVersus2PWindow(GameState* lpGameState, bool* pOpen) {
 	static CharacterSelection* characters[2] = { &CHARACTERS[0], &CHARACTERS[1] };
 	static int characterIDs[2] = { 1, 2 };
@@ -55,6 +110,8 @@ void DrawEnterVersus2PWindow(GameState* lpGameState, bool* pOpen) {
 		}
 		ImGui::EndCombo();
 	}
+
+	
 
 	if (ImGui::Button("Go")) {
 		EnterVersus2P(lpGameState, characterIDs, stage);
@@ -213,6 +270,7 @@ void DrawGlobalStateWindow(GameState* lpGameState, bool* pOpen) {
 			ImGui::Text("NPC root:"); ImGui::NextColumn(); ImGui::Text("%p", *lpGameState->arrNpcObjects); ImGui::NextColumn();
 			ImGui::Text("Player data root:"); ImGui::NextColumn(); ImGui::Text("%p", lpGameState->arrPlayerData); ImGui::NextColumn();
 			ImGui::Text("Window handle:"); ImGui::NextColumn(); ImGui::Text("%d", *lpGameState->hWnd); ImGui::NextColumn();
+			ImGui::Text("Current Game Tick:"); ImGui::NextColumn(); ImGui::Text("%d", *lpGameState->cGameTick); ImGui::NextColumn();
 
 			ImGui::Columns(1);
 			ImGui::EndTabItem();
@@ -310,7 +368,7 @@ void DrawCharacterDataWindow(GameState* lpGameState, bool* pOpen) {
 	ImGui::End();
 }
 
-void DrawObjectStateWindow(GameObjectData* lpGameObject, bool* pOpen) {
+void DrawObjectStateWindow(GameObjectData* lpGameObject, GameState* lpGameState, bool* pOpen) {
 	ImGui::Begin(
 		lpGameObject->playerIndex == 0 ? "Player 1 Object State" : "Player 2 Object State",
 		pOpen,
@@ -318,10 +376,22 @@ void DrawObjectStateWindow(GameObjectData* lpGameObject, bool* pOpen) {
 	);
 
 	ImGui::Columns(2, NULL, false);
+	static int lastAction[2] = { 0, 0 };
+	static WORD currentFrame;
+	static WORD previousFrame;
+	
+
+	if (lpGameObject->actNo != lastAction[lpGameObject->playerIndex]) {
+		previousFrame = currentFrame;
+		currentFrame = *lpGameState->cGameTick;
+
+		lastAction[lpGameObject->playerIndex] = lpGameObject->actNo;	
+	}
 
 	ImGui::Text("Object address:");
 	ImGui::Text("Object ID:");
 	ImGui::Text("Action ID:");
+	ImGui::Text("Action ID Entry Frame:");
 	ImGui::Text("Object Facing:");
 	ImGui::Text("Object Side:");
 	ImGui::Text("Player data address:");
@@ -329,12 +399,17 @@ void DrawObjectStateWindow(GameObjectData* lpGameObject, bool* pOpen) {
 	ImGui::Text("Y Position:");
 	ImGui::Text("X Velocity:");
 	ImGui::Text("Y Velocity:");
+	ImGui::Text("Previous Action ID:");
+	ImGui::Text("Previous Action ID Entry Frame:");
+	ImGui::Text("Time in Previous Action ID:");
+
 
 	ImGui::NextColumn();
 
 	ImGui::Text("%p", lpGameObject);
 	ImGui::Text("%X", lpGameObject->objectID);
 	ImGui::Text("%X", lpGameObject->actNo);
+	ImGui::Text("%d", currentFrame);
 	ImGui::Text("%X", lpGameObject->facing);
 	ImGui::Text("%X", lpGameObject->side);
 	ImGui::Text("%p", lpGameObject->playerData);
@@ -342,6 +417,255 @@ void DrawObjectStateWindow(GameObjectData* lpGameObject, bool* pOpen) {
 	ImGui::Text("%i", lpGameObject->ypos);
 	ImGui::Text("%i", lpGameObject->xvel);
 	ImGui::Text("%i", lpGameObject->yvel);
+	ImGui::Text("%X", lastAction);
+	ImGui::Text("%d", previousFrame);
+	ImGui::Text("%d", (currentFrame - previousFrame));
+
+
+	ImGui::End();
+}
+
+void DrawFrameAdvantageWindow( GameState* lpGameState, bool* pOpen) {
+	GameObjectData* lpGameObject[2] = { lpGameState->arrCharacters[0], lpGameState->arrCharacters[1] };
+
+	ImGui::Begin(
+		"Frame Advantage Display",
+		pOpen,
+		ImGuiWindowFlags_None
+	);
+
+	ImGui::Columns(2, NULL, false);
+	static int lastAction[2] = { 0, 0 };
+	static WORD currentFrame;
+	static WORD previousFrame;
+
+
+	if (lpGameObject[0]->actNo != lastAction[lpGameObject[0]->playerIndex]) {
+		previousFrame = currentFrame;
+		currentFrame = *lpGameState->cGameTick;
+
+		lastAction[lpGameObject[0]->playerIndex] = lpGameObject[0]->actNo;
+		lpGameObject[0]->dwGraphicalEffects = CE_FLAME;
+	}
+
+	ImGui::Text("Object address:");
+	ImGui::Text("Object ID:");
+	ImGui::Text("Action ID:");
+	ImGui::Text("Action ID Entry Frame:");
+	ImGui::Text("Object Facing:");
+	ImGui::Text("Object Side:");
+	ImGui::Text("Player data address:");
+	ImGui::Text("X Position:");
+	ImGui::Text("Y Position:");
+	ImGui::Text("X Velocity:");
+	ImGui::Text("Y Velocity:");
+	ImGui::Text("Previous Action ID:");
+	ImGui::Text("Previous Action ID Entry Frame:");
+	ImGui::Text("Time in Previous Action ID:");
+	ImGui::Text("Graphical Effects ID:");
+
+
+	ImGui::NextColumn();
+
+	ImGui::Text("%p", lpGameObject[0]);
+	ImGui::Text("%X", lpGameObject[0]->objectID);
+	ImGui::Text("%X", lpGameObject[0]->actNo);
+	ImGui::Text("%d", currentFrame);
+	ImGui::Text("%X", lpGameObject[0]->facing);
+	ImGui::Text("%X", lpGameObject[0]->side);
+	ImGui::Text("%p", lpGameObject[0]->playerData);
+	ImGui::Text("%i", lpGameObject[0]->xPos);
+	ImGui::Text("%i", lpGameObject[0]->ypos);
+	ImGui::Text("%i", lpGameObject[0]->xvel);
+	ImGui::Text("%i", lpGameObject[0]->yvel);
+	ImGui::Text("%X", lastAction);
+	ImGui::Text("%d", previousFrame);
+	ImGui::Text("%d", (currentFrame - previousFrame));
+	ImGui::Text("%p", lpGameObject[0]->dwGraphicalEffects);
+
+	ImGui::NextColumn();
+
+	ImGui::Text("Object address:");
+	ImGui::Text("Object ID:");
+	ImGui::Text("Action ID:");
+	ImGui::Text("Action ID Entry Frame:");
+	ImGui::Text("Object Facing:");
+	ImGui::Text("Object Side:");
+	ImGui::Text("Player data address:");
+	ImGui::Text("X Position:");
+	ImGui::Text("Y Position:");
+	ImGui::Text("X Velocity:");
+	ImGui::Text("Y Velocity:");
+	ImGui::Text("Previous Action ID:");
+	ImGui::Text("Previous Action ID Entry Frame:");
+	ImGui::Text("Time in Previous Action ID:");
+	ImGui::Text("Graphical Effects ID:");
+
+
+	ImGui::NextColumn();
+
+	ImGui::Text("%p", lpGameObject[1]);
+	ImGui::Text("%X", lpGameObject[1]->objectID);
+	ImGui::Text("%X", lpGameObject[1]->actNo);
+	ImGui::Text("%d", currentFrame);
+	ImGui::Text("%X", lpGameObject[1]->facing);
+	ImGui::Text("%X", lpGameObject[1]->side);
+	ImGui::Text("%p", lpGameObject[1]->playerData);
+	ImGui::Text("%i", lpGameObject[1]->xPos);
+	ImGui::Text("%i", lpGameObject[1]->ypos);
+	ImGui::Text("%i", lpGameObject[1]->xvel);
+	ImGui::Text("%i", lpGameObject[1]->yvel);
+	ImGui::Text("%X", lastAction);
+	ImGui::Text("%d", previousFrame);
+	ImGui::Text("%d", (currentFrame - previousFrame));
+	ImGui::Text("%p", lpGameObject[1]->dwGraphicalEffects);
+
+	ImGui::End();
+}
+
+
+
+void DrawInputDisplay(TCHAR* windowName, PlayerData* lpPlayerData, GameState* lpGameState, bool* pOpen) {
+	//ImGui::Begin(
+	//	windowName,
+	//	pOpen,
+	//	ImGuiWindowFlags_None
+	//);
+	//ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+
+	//ImGui::Text("Primitives");
+	//static float sz = 36.0f;
+	//static float thickness = 4.0f;
+	//static ImVec4 col = ImVec4(1.0f, 1.0f, 0.4f, 1.0f);
+	//ImGui::DragFloat("Size", &sz, 0.2f, 2.0f, 72.0f, "%.0f");
+	//ImGui::DragFloat("Thickness", &thickness, 0.05f, 1.0f, 8.0f, "%.02f");
+	//ImGui::ColorEdit4("Color", &col.x);
+	//{
+	//	const ImVec2 p = ImGui::GetCursorScreenPos();
+	//	const ImU32 col32 = ImColor(col);
+	//	float x = p.x + 4.0f, y = p.y + 4.0f, spacing = 8.0f;
+	//	for (int n = 0; n < 2; n++)
+	//	{
+	//		// First line uses a thickness of 1.0, second line uses the configurable thickness
+	//		float th = (n == 0) ? 1.0f : thickness;
+	//		draw_list->AddCircle(ImVec2(x + sz * 0.5f, y + sz * 0.5f), sz * 0.5f, col32, 6, th); x += sz + spacing;     // Hexagon
+	//		draw_list->AddCircle(ImVec2(x + sz * 0.5f, y + sz * 0.5f), sz * 0.5f, col32, 20, th); x += sz + spacing;    // Circle
+	//		draw_list->AddRect(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, 0.0f, ImDrawCornerFlags_All, th); x += sz + spacing;
+	//		draw_list->AddRect(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, 10.0f, ImDrawCornerFlags_All, th); x += sz + spacing;
+	//		draw_list->AddRect(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, 10.0f, ImDrawCornerFlags_TopLeft | ImDrawCornerFlags_BotRight, th); x += sz + spacing;
+	//		draw_list->AddTriangle(ImVec2(x + sz * 0.5f, y), ImVec2(x + sz, y + sz - 0.5f), ImVec2(x, y + sz - 0.5f), col32, th); x += sz + spacing;
+	//		draw_list->AddLine(ImVec2(x, y), ImVec2(x + sz, y), col32, th); x += sz + spacing;               // Horizontal line (note: drawing a filled rectangle will be faster!)
+	//		draw_list->AddLine(ImVec2(x, y), ImVec2(x, y + sz), col32, th); x += spacing;                  // Vertical line (note: drawing a filled rectangle will be faster!)
+	//		draw_list->AddLine(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, th); x += sz + spacing;               // Diagonal line
+	//		draw_list->AddBezierCurve(ImVec2(x, y), ImVec2(x + sz * 1.3f, y + sz * 0.3f), ImVec2(x + sz - sz * 1.3f, y + sz - sz * 0.3f), ImVec2(x + sz, y + sz), col32, th);
+	//		x = p.x + 4;
+	//		y += sz + spacing;
+	//	}
+	//	draw_list->AddCircleFilled(ImVec2(x + sz * 0.5f, y + sz * 0.5f), sz * 0.5f, col32, 6); x += sz + spacing;       // Hexagon
+	//	draw_list->AddCircleFilled(ImVec2(x + sz * 0.5f, y + sz * 0.5f), sz * 0.5f, col32, 32); x += sz + spacing;      // Circle
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + sz, y + sz), col32); x += sz + spacing;
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, 10.0f); x += sz + spacing;
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + sz, y + sz), col32, 10.0f, ImDrawCornerFlags_TopLeft | ImDrawCornerFlags_BotRight); x += sz + spacing;
+	//	draw_list->AddTriangleFilled(ImVec2(x + sz * 0.5f, y), ImVec2(x + sz, y + sz - 0.5f), ImVec2(x, y + sz - 0.5f), col32); x += sz + spacing;
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + sz, y + thickness), col32); x += sz + spacing;          // Horizontal line (faster than AddLine, but only handle integer thickness)
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + thickness, y + sz), col32); x += spacing + spacing;     // Vertical line (faster than AddLine, but only handle integer thickness)
+	//	draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + 1, y + 1), col32);          x += sz;                  // Pixel (faster than AddLine)
+	//	draw_list->AddRectFilledMultiColor(ImVec2(x, y), ImVec2(x + sz, y + sz), IM_COL32(0, 0, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(255, 255, 0, 255), IM_COL32(0, 255, 0, 255));
+	//	ImGui::Dummy(ImVec2((sz + spacing) * 8, (sz + spacing) * 3));
+	//}
+	//ImGui::Separator();
+
+	ImGui::Begin("INPUT LOG", pOpen);
+
+
+	
+
+
+	static unsigned int lastAction[2] = { 0, 0 };
+	static WORD currentFrame[2] = { *lpGameState->cGameTick, 0 };
+	static ExampleAppLog actionLogs[2];
+	
+	
+
+	ImGui::Text("Input Bits: %d", lastAction[0]); ImGui::NextColumn(); ImGui::Text("Entry Frame: %d", currentFrame[0]); ImGui::NextColumn(); ImGui::Text("Total Input Frames: %d", (*lpGameState->cGameTick - currentFrame[0]));
+
+	if (normalizeInput(lpGameState, lpGameState->nP1CurrentFrameInputs) != lastAction[0]) {
+		lastAction[1] = lastAction[0];
+		currentFrame[1] = currentFrame[0];
+		lastAction[0] = normalizeInput(lpGameState, lpGameState->nP1CurrentFrameInputs);
+		currentFrame[0] = *lpGameState->cGameTick;
+
+		
+
+		
+		
+		if (lastAction[1] == 0)
+		{
+			actionLogs[0].AddLog(" Neutral ");
+
+		}
+		else
+		{
+			if (lastAction[1] & Up)
+			{
+				actionLogs[0].AddLog(" Up ");
+
+			}
+			if (lastAction[1] & Down)
+			{
+				actionLogs[0].AddLog(" Down ");
+
+			}
+			if (lastAction[1] & Left)
+			{
+				actionLogs[0].AddLog(" Left ");
+
+			}
+			if (lastAction[1] & Right)
+			{
+				actionLogs[0].AddLog(" Right ");
+
+			}
+		}
+		if (lastAction[1] & Punch)
+		{
+			actionLogs[0].AddLog(" Punch ");
+
+		}
+		if (lastAction[1] & Kick)
+		{
+			actionLogs[0].AddLog(" Kick ");
+
+		}
+		if (lastAction[1] & HSlash)
+		{
+			actionLogs[0].AddLog(" HSlash ");
+
+		}
+		if (lastAction[1] & Slash)
+		{
+			actionLogs[0].AddLog(" Slash ");
+
+		}
+		if (lastAction[1] & Dust)
+		{
+			actionLogs[0].AddLog(" Dust ");
+
+		}
+		actionLogs[0].AddLog("\n");
+
+		actionLogs[0].AddLog("Input on frame: %d\n", currentFrame[1]);
+		actionLogs[0].AddLog("Input for: %d frames\n", currentFrame[0] - currentFrame[1]);
+		actionLogs[0].AddLog("Current Input Bits: %d\n", lastAction[1]);
+
+		actionLogs[0].AddLog("\n\n");
+	}
+
+	actionLogs[0].Draw(
+		"INPUT TEST",
+		pOpen
+	);
 
 	ImGui::End();
 }
@@ -385,12 +709,27 @@ void DrawPlayerStateWindow(TCHAR* windowName, PlayerData* lpPlayerData, bool* pO
 	ImGui::End();
 }
 
-void DrawActionLogWindow(GameObjectData* lpGameObject, bool* pOpen) {
+void DrawActionLogWindow(GameObjectData* lpGameObject, GameState* lpGameState, bool* pOpen) {
 	static int lastAction[2] = { 0, 0 };
 	static ExampleAppLog actionLogs[2];
 
 	if (lpGameObject->actNo != lastAction[lpGameObject->playerIndex]) {
+		WORD currentFrame = *lpGameState->cGameTick;
+		
 		actionLogs[lpGameObject->playerIndex].AddLog("Action ID: %04X\n", lpGameObject->actNo);
+		actionLogs[lpGameObject->playerIndex].AddLog("State Changed on Frame: %d\n", currentFrame); 
+		actionLogs[lpGameObject->playerIndex].AddLog("Current State Flag: %d\n\n", lpGameObject->stateFlags);
+		actionLogs[lpGameObject->playerIndex].AddLog("Current Input Bits: %d\n\n", normalizeInput(lpGameState, lpGameState->nP1CurrentFrameInputs));
+		if (lpGameObject->actNo == 0x003A)
+		{
+			actionLogs[lpGameObject->playerIndex].AddLog("They Crouch blocked maybe\n");
+			
+		}
+		if (normalizeInput(lpGameState, lpGameState->nP1CurrentFrameInputs) & HSlash)
+		{
+			actionLogs[lpGameObject->playerIndex].AddLog("They Pressed HSlash\n");
+
+		}
 		lastAction[lpGameObject->playerIndex] = lpGameObject->actNo;
 	}
 
@@ -677,6 +1016,9 @@ void DrawDebugMenu(GameState* lpGameState) {
 			ImGui::MenuItem("Player 1 Object Action Log", NULL, &show_p1_log, *lpGameState->arrCharacters != 0);
 			ImGui::MenuItem("Player 2 Object State", NULL, &show_p2_object_state, *lpGameState->arrCharacters != 0);
 			ImGui::MenuItem("Player 2 Object Action Log", NULL, &show_p2_log, *lpGameState->arrCharacters != 0);
+			ImGui::MenuItem("Frame Advantage Display", NULL, &show_p_frame_advantage, *lpGameState->arrCharacters != 0);
+			ImGui::MenuItem("Player 1 Input Display", NULL, &show_p1_input_display, *lpGameState->arrCharacters != 0);
+			ImGui::MenuItem("Player 2 Input Display", NULL, &show_p2_input_display, *lpGameState->arrCharacters != 0);
 			ImGui::EndMenu();
 		}
 		ImGui::MenuItem("Save/Load State", NULL, &show_saveload);
@@ -716,19 +1058,22 @@ void DrawOverlay(GameMethods* lpGameMethods, GameState* lpGameState) {
 		DrawPlayerStateWindow("Player 1 State", &lpGameState->arrPlayerData[0], &show_p1_state);
 	}
 	if (show_p1_object_state) {
-		DrawObjectStateWindow(&(*lpGameState->arrCharacters)[0], &show_p1_object_state);
+		DrawObjectStateWindow(&(*lpGameState->arrCharacters)[0], lpGameState, &show_p1_object_state);
 	}
 	if (show_p1_log) {
-		DrawActionLogWindow(&(*lpGameState->arrCharacters)[0], &show_p1_log);
+		DrawActionLogWindow(&(*lpGameState->arrCharacters)[0], lpGameState , &show_p1_log);
 	}
 	if (show_p2_state) {
 		DrawPlayerStateWindow("Player 2 State", &lpGameState->arrPlayerData[1], &show_p2_state);
 	}
 	if (show_p2_object_state) {
-		DrawObjectStateWindow(&(*lpGameState->arrCharacters)[1], &show_p2_object_state);
+		DrawObjectStateWindow(&(*lpGameState->arrCharacters)[1], lpGameState, &show_p2_object_state);
 	}
 	if (show_p2_log) {
-		DrawActionLogWindow(&(*lpGameState->arrCharacters)[1], &show_p2_log);
+		DrawActionLogWindow(&(*lpGameState->arrCharacters)[1], lpGameState, &show_p2_log);
+	}
+	if (show_p_frame_advantage) {
+		DrawFrameAdvantageWindow( lpGameState, &show_p_frame_advantage);
 	}
 	if (show_help) {
 		DrawHelpWindow(&show_help);
@@ -760,6 +1105,12 @@ void DrawOverlay(GameMethods* lpGameMethods, GameState* lpGameState) {
 	}
 	if (show_ggpo_join) {
 		DrawGGPOJoinWindow(lpGameState, &show_ggpo_join);
+	}
+	if (show_p1_input_display) {
+		DrawInputDisplay("Player 1 Input Display", &lpGameState->arrPlayerData[0], lpGameState, &show_p1_input_display);
+	}
+	if (show_p2_input_display) {
+		DrawInputDisplay("Player 2 Input Display", &lpGameState->arrPlayerData[1], lpGameState, &show_p2_input_display);
 	}
 
 	ImGui::EndFrame();

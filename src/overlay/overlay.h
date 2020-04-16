@@ -24,5 +24,8 @@ static bool show_ggpo_host = false;
 static bool show_ggpo_join = false;
 static bool show_character_select = false;
 static bool show_character_data = false;
+static bool show_p_frame_advantage = false;
+static bool show_p1_input_display = false;
+static bool show_p2_input_display = false;
 
 LRESULT WINAPI OverlayWindowFunc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);

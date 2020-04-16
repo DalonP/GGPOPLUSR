@@ -375,6 +375,8 @@ typedef struct GameState {
     DWORD* nUnknownIsPlayerActive2;
     WORD* arrbPlayerCPUValues;
 
+    WORD* cGameTick;
+
     int* nPrimitivesDrawn;
     int* nNextPrimitiveBufferOffset;
 
@@ -674,7 +676,7 @@ struct GameObjectData {
     GameObjectStateFlags stateFlags;
     int queuedAction;
     DWORD unc_upcomingAction;
-    WORD actNo;
+    WORD actNo; /*short value representing current Action*/
     WORD field_0x1a;
     short field_0x1c;
     short field_0x1e;

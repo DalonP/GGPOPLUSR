@@ -465,6 +465,7 @@ HRESULT LocateGameState(HMODULE peRoot, GameState* dest) {
 	dest->recStatus = (int*)(peRootOffset + 0x4FDD24);
 	dest->recEnabled = (DWORD*)(peRootOffset + 0x4FDD2C);
 	dest->nSystemState = (DWORD*)(peRootOffset + 0x555FF4);
+	dest->cGameTick = (WORD*)(peRootOffset + 0x50653C);
 	dest->nGameMode = (DWORD*)(peRootOffset + 0x51B8CC);
 	dest->arrnConfirmedCharacters = (WORD*)(peRootOffset + 0x51B9E4);
 	dest->nCharacterSelectStageIndex = (WORD*)(peRootOffset + 0x516048);

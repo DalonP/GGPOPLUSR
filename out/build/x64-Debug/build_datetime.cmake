@@ -1,0 +1,5 @@
+STRING(TIMESTAMP BUILD_DATETIME_ISO8601 UTC)
+FILE(WRITE include/build_datetime.h "#ifndef BUILD_DATETIME_H\n")
+FILE(APPEND include/build_datetime.h "#define BUILD_DATETIME_H\n\n")
+FILE(APPEND include/build_datetime.h "#define _BUILD_DATETIME_ISO8601_ \"${BUILD_DATETIME_ISO8601}\"\n\n")
+FILE(APPEND include/build_datetime.h "#endif // BUILD_DATETIME_H\n")
